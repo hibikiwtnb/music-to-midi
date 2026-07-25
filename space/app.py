@@ -4,6 +4,7 @@ Music to MIDI - Gradio Web 界面
 """
 
 import atexit
+import html
 import importlib
 import logging
 import math
@@ -243,6 +244,16 @@ def read_logs():
         return f"[read_logs error] {exc}"
 
 
+def update_audio_file_name(audio_path):
+    if audio_path is None:
+        return ""
+    raw_path = audio_path if isinstance(audio_path, (str, Path)) else getattr(audio_path, "name", "")
+    if not raw_path:
+        return ""
+    file_name = html.escape(Path(str(raw_path)).name)
+    return f"<div class='audio-file-name'>Selected audio: <code>{file_name}</code></div>"
+
+
 def ensure_yourmt3_code():
     """加载与桌面版、Colab 相同的项目内置 YourMT3 补丁源码。"""
     amt_src, source_sha256, source_file_count = _validate_controlled_yourmt3_layouts()
@@ -332,7 +343,6 @@ from src.models.data_models import (
 )
 from src.models.muscriptor_instruments import (
     MUSCRIPTOR_INSTRUMENTS,
-    muscriptor_instrument_label,
     validate_muscriptor_instruments,
 )
 from src.utils.yourmt3_downloader import YOURMT3_MODELS
@@ -341,6 +351,10 @@ SPACE_LANGUAGE = os.environ.get("MUSIC_TO_MIDI_LANGUAGE", "zh_CN")
 if SPACE_LANGUAGE not in Translator.AVAILABLE_LANGUAGES:
     raise RuntimeError(f"Unsupported MUSIC_TO_MIDI_LANGUAGE: {SPACE_LANGUAGE}")
 SPACE_TRANSLATOR = Translator(SPACE_LANGUAGE)
+SZSERVER_MINIMAL_PROFILE = (
+    os.environ.get("MUSIC_TO_MIDI_SZSERVER_MINIMAL", "").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
 
 
 def st(key: str, **kwargs) -> str:
@@ -397,19 +411,96 @@ BACKEND_CHOICES = [
     (st("main.engine.miros"), MultiInstrumentModel.MIROS.value),
     (st("main.engine.muscriptor"), MultiInstrumentModel.MUSCRIPTOR.value),
 ]
-MUSCRIPTOR_INSTRUMENT_CHOICES = [
-    (muscriptor_instrument_label(name, SPACE_LANGUAGE), name) for name in MUSCRIPTOR_INSTRUMENTS
-]
-YOURMT3_MODEL_CHOICES = [
-    (YOURMT3_MODELS[model.value]["ui_label"], model.value)
-    for model in (
-        YourMT3Model.YMT3_PLUS,
-        YourMT3Model.YPTF_SINGLE_NOPS,
-        YourMT3Model.YPTF_MULTI_PS,
-        YourMT3Model.YPTF_MOE_MULTI_NOPS,
-        YourMT3Model.YPTF_MOE_MULTI_PS,
-    )
-]
+MUSCRIPTOR_INSTRUMENT_GROUPS = (
+    (
+        "Keys / Percussion",
+        (
+            "acoustic_piano",
+            "electric_piano",
+            "chromatic_percussion",
+            "organ",
+            "orchestral_harp",
+            "timpani",
+        ),
+    ),
+    (
+        "Guitars",
+        (
+            "acoustic_guitar",
+            "clean_electric_guitar",
+            "distorted_electric_guitar",
+        ),
+    ),
+    ("Bass", ("acoustic_bass", "electric_bass")),
+    (
+        "Strings",
+        (
+            "violin",
+            "viola",
+            "cello",
+            "contrabass",
+            "string_ensemble",
+            "synth_strings",
+            "orchestra_hit",
+        ),
+    ),
+    (
+        "Brass",
+        (
+            "trumpet",
+            "trombone",
+            "tuba",
+            "french_horn",
+            "brass_section",
+        ),
+    ),
+    (
+        "Winds",
+        (
+            "soprano_and_alto_sax",
+            "tenor_sax",
+            "baritone_sax",
+            "oboe",
+            "english_horn",
+            "bassoon",
+            "clarinet",
+            "flutes",
+        ),
+    ),
+    ("Synth / Voice", ("voice", "synth_lead", "synth_pad")),
+    ("Drums", ("drums",)),
+)
+MUSCRIPTOR_INSTRUMENT_CHOICES = [(name, name) for name in MUSCRIPTOR_INSTRUMENTS]
+LOVE_LIVE_MUSCRIPTOR_TEMPLATE = (
+    "voice",
+    "drums",
+    "electric_bass",
+    "acoustic_piano",
+    "clean_electric_guitar",
+    "distorted_electric_guitar",
+    "string_ensemble",
+    "chromatic_percussion",
+    "synth_lead",
+    "synth_pad",
+)
+if SZSERVER_MINIMAL_PROFILE:
+    YOURMT3_MODEL_CHOICES = [
+        (
+            YOURMT3_MODELS[YourMT3Model.YPTF_MOE_MULTI_NOPS.value]["ui_label"],
+            YourMT3Model.YPTF_MOE_MULTI_NOPS.value,
+        )
+    ]
+else:
+    YOURMT3_MODEL_CHOICES = [
+        (YOURMT3_MODELS[model.value]["ui_label"], model.value)
+        for model in (
+            YourMT3Model.YMT3_PLUS,
+            YourMT3Model.YPTF_SINGLE_NOPS,
+            YourMT3Model.YPTF_MULTI_PS,
+            YourMT3Model.YPTF_MOE_MULTI_NOPS,
+            YourMT3Model.YPTF_MOE_MULTI_PS,
+        )
+    ]
 STAGE_LABEL_KEYS = {
     ProcessingStage.PREPROCESSING: "preprocessing",
     ProcessingStage.SEPARATION: "separation",
@@ -474,10 +565,22 @@ def _manual_midi_route_label(route: str) -> str:
     return f"{st(family_key)} · {route_label}"
 
 
+if SZSERVER_MINIMAL_PROFILE:
+    _MANUAL_MIDI_ROUTES_FOR_UI = [
+        f"{MIDI_ROUTE_YOURMT3_PREFIX}{YourMT3Model.YPTF_MOE_MULTI_NOPS.value}",
+        MIDI_ROUTE_MIROS,
+        MIDI_ROUTE_MUSCRIPTOR,
+        MIDI_ROUTE_PIANO_TRANSKUN,
+        MIDI_ROUTE_PIANO_TRANSKUN_V2_AUG,
+        MIDI_ROUTE_PIANO_ARIA_AMT,
+        MIDI_ROUTE_PIANO_BYTEDANCE_PEDAL,
+    ]
+else:
+    _MANUAL_MIDI_ROUTES_FOR_UI = list(MANUAL_MIDI_ROUTES)
 MANUAL_MIDI_ROUTE_CHOICES = [
-    (_manual_midi_route_label(route), route) for route in MANUAL_MIDI_ROUTES
+    (_manual_midi_route_label(route), route) for route in _MANUAL_MIDI_ROUTES_FOR_UI
 ]
-if len(MANUAL_MIDI_ROUTE_CHOICES) != 11:
+if not SZSERVER_MINIMAL_PROFILE and len(MANUAL_MIDI_ROUTE_CHOICES) != 11:
     raise RuntimeError(
         "Space requires exactly eleven explicit per-track MIDI routes; "
         f"received {len(MANUAL_MIDI_ROUTE_CHOICES)}"
@@ -814,6 +917,46 @@ def _build_midi_result_state(
     }
 
 
+def _write_midi_result_share_page(result_state: dict, output_dir: str | Path) -> str:
+    """Write a standalone page for reopening the MIDI workbench from another browser."""
+    from src.gui.web.muscriptor_result_runtime import (
+        build_muscriptor_result_html,
+        muscriptor_result_head,
+    )
+    from src.gui.web.track_mixer_runtime import track_file_url
+
+    output_path = Path(output_dir).resolve()
+    page_path = output_path / "share.html"
+    title = str(result_state.get("backend_label") or "music-to-midi result")
+    body = build_muscriptor_result_html(result_state, st, SPACE_LANGUAGE)
+    page_path.write_text(
+        "\n".join(
+            [
+                "<!doctype html>",
+                '<html lang="zh-Hans">',
+                "<head>",
+                '<meta charset="utf-8">',
+                '<meta name="viewport" content="width=device-width, initial-scale=1">',
+                f"<title>{title}</title>",
+                muscriptor_result_head(),
+                "<style>",
+                "body{margin:0;padding:18px;background:#f6f8fb;color:#18212f;font-family:system-ui,'Noto Sans SC',sans-serif;}",
+                ".share-shell{max-width:1280px;margin:0 auto;}",
+                "</style>",
+                "</head>",
+                "<body>",
+                '<main class="share-shell">',
+                body,
+                "</main>",
+                "</body>",
+                "</html>",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return track_file_url(page_path)
+
+
 def _result_backend_label(config: Config) -> str:
     if config.processing_mode == ProcessingMode.SMART.value:
         return {value: label for label, value in BACKEND_CHOICES}[config.transcription_backend]
@@ -823,6 +966,9 @@ def _result_backend_label(config: Config) -> str:
 def ensure_model_weights(model_key: str):
     """确保用户选中的 YourMT3+ 官方 checkpoint 已下载。"""
     ensure_yourmt3_code()
+
+    if SZSERVER_MINIMAL_PROFILE and model_key != YourMT3Model.YPTF_MOE_MULTI_NOPS.value:
+        raise RuntimeError(f"YourMT3 checkpoint is not enabled on szserver: {model_key!r}")
 
     valid_models = {choice.value for choice in YourMT3Model}
     if model_key not in valid_models:
@@ -834,6 +980,9 @@ def ensure_model_weights(model_key: str):
     if model_path and model_path.exists():
         logger.info("YourMT3+ model found: %s", model_path)
         return
+
+    if SZSERVER_MINIMAL_PROFILE:
+        raise RuntimeError(f"YourMT3+ checkpoint is not cached on szserver: {model_key}")
 
     logger.info("YourMT3+ selected checkpoint missing, downloading: %s", model_key)
     download_model(model_key, progress_callback=lambda _p, msg: logger.info(msg))
@@ -1046,6 +1195,9 @@ def ensure_bytedance_piano_weights():
         logger.info("ByteDance Piano checkpoint found")
         return
 
+    if SZSERVER_MINIMAL_PROFILE:
+        raise RuntimeError("ByteDance Piano checkpoint is not cached on szserver")
+
     logger.info("ByteDance Piano checkpoint not found, downloading...")
     download_bytedance_piano_model()
     logger.info("ByteDance Piano checkpoint downloaded")
@@ -1053,7 +1205,8 @@ def ensure_bytedance_piano_weights():
 
 # Install the pinned code before Gradio begins accepting concurrent requests.
 # Failure is fatal and visible; it never downgrades the ZeroGPU PyTorch runtime.
-ensure_aria_amt_runtime()
+if not SZSERVER_MINIMAL_PROFILE:
+    ensure_aria_amt_runtime()
 
 clear_logs()
 
@@ -1251,6 +1404,7 @@ def _convert_impl(
                 desc=message,
             ),
         )
+        share_url = _write_midi_result_share_page(result_state, output_dir)
     except InterruptedError:
         logger.info("Direct conversion cancelled by user")
         try:
@@ -1290,6 +1444,7 @@ def _convert_impl(
         f"BPM: {bpm_str}",
         f"{st('space.status.device')}: {device_label}",
         f"{st('space.status.midi_file')}: {Path(result.midi_path).name}",
+        f"Share page: {share_url}",
         st(
             "space.status.output_retention",
             hours=SPACE_OUTPUT_RETENTION_SECONDS / 3600,
@@ -1837,9 +1992,14 @@ def _track_control_updates(enabled, route):
         gr.update(interactive=is_enabled),
         gr.update(interactive=is_enabled and normalized_route in MANUAL_MIDI_ROUTES),
         status,
+        gr.update(visible=normalized_route == MIDI_ROUTE_MUSCRIPTOR),
         gr.update(
             visible=normalized_route == MIDI_ROUTE_MUSCRIPTOR,
             interactive=is_enabled and normalized_route == MIDI_ROUTE_MUSCRIPTOR,
+        ),
+        *_muscriptor_group_updates(
+            normalized_route == MIDI_ROUTE_MUSCRIPTOR,
+            is_enabled and normalized_route == MIDI_ROUTE_MUSCRIPTOR,
         ),
     )
 
@@ -1978,6 +2138,103 @@ def _main_action_label(mode):
     return "▶  " + st("toolbar.start_convert")
 
 
+def _flatten_muscriptor_groups(*group_values):
+    selected = []
+    for group_value in group_values:
+        if not group_value:
+            continue
+        selected.extend(group_value)
+    return validate_muscriptor_instruments(selected)
+
+
+def _apply_muscriptor_love_live_template(enabled, *group_values):
+    selected = set(_flatten_muscriptor_groups(*group_values))
+    template = set(LOVE_LIVE_MUSCRIPTOR_TEMPLATE)
+    if enabled:
+        selected.update(template)
+    else:
+        selected.difference_update(template)
+    return tuple(
+        gr.update(value=[name for name in choices if name in selected])
+        for _group_name, choices in MUSCRIPTOR_INSTRUMENT_GROUPS
+    )
+
+
+def _muscriptor_group_updates(visible: bool, interactive: bool = True):
+    return tuple(
+        gr.update(visible=visible, interactive=interactive)
+        for _group_name, _choices in MUSCRIPTOR_INSTRUMENT_GROUPS
+    )
+
+
+def _convert_audio_to_midi_grouped(
+    audio_path,
+    mode,
+    transcription_backend,
+    yourmt3_model,
+    keys_percussion,
+    guitars,
+    bass,
+    strings,
+    brass,
+    winds,
+    synth_voice,
+    drums,
+    progress=gr.Progress(),
+):
+    return convert_audio_to_midi(
+        audio_path,
+        mode,
+        transcription_backend,
+        yourmt3_model,
+        _flatten_muscriptor_groups(
+            keys_percussion,
+            guitars,
+            bass,
+            strings,
+            brass,
+            winds,
+            synth_voice,
+            drums,
+        ),
+        progress=progress,
+    )
+
+
+def _convert_one_track_grouped(
+    track_state,
+    track_id,
+    midi_enabled,
+    route,
+    keys_percussion,
+    guitars,
+    bass,
+    strings,
+    brass,
+    winds,
+    synth_voice,
+    drums,
+    progress=gr.Progress(),
+):
+    return _convert_one_track(
+        track_state,
+        track_id,
+        midi_enabled,
+        route,
+        _flatten_muscriptor_groups(
+            keys_percussion,
+            guitars,
+            bass,
+            strings,
+            brass,
+            winds,
+            synth_voice,
+            drums,
+        ),
+        progress=progress,
+    )
+
+
 def update_mode_controls(mode, transcription_backend):
     if mode not in MODE_IDS:
         raise RuntimeError(f"Unsupported processing mode: {mode}")
@@ -2017,109 +2274,233 @@ def update_backend_controls(mode, transcription_backend):
 
 CUSTOM_CSS = """
 .gradio-container {
-    background: #1a1a2e !important;
-    max-width: 1100px !important;
+    background: #f6f8fb !important;
+    color: #1f2937 !important;
+    max-width: 1180px !important;
+    padding: 18px !important;
 }
 .app-header {
-    background: #16213e;
-    border-bottom: 2px solid #2a2a4a;
+    background: #ffffff;
+    border: 1px solid #d8e0ea;
     border-radius: 12px;
-    padding: 16px 24px;
-    margin-bottom: 12px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+    box-shadow: 0 8px 24px rgba(31, 41, 55, 0.06);
 }
 .app-header h1 {
-    color: #e0e0e0 !important;
-    font-size: 22px !important;
+    color: #111827 !important;
+    font-size: 24px !important;
     margin: 0 !important;
+    letter-spacing: 0 !important;
 }
 .app-header p {
-    color: #8892a0 !important;
+    color: #5f6f85 !important;
     font-size: 13px !important;
-    margin: 4px 0 0 0 !important;
+    margin: 5px 0 0 0 !important;
+}
+.gradio-container .block,
+.gradio-container .form,
+.gradio-container .panel {
+    border-color: #d8e0ea !important;
+    box-shadow: none !important;
 }
 .upload-zone {
-    background: #1f2940 !important;
-    border: 2px dashed #3a4a6a !important;
-    border-radius: 16px !important;
-    min-height: 120px !important;
+    background: #ffffff !important;
+    border: 1.5px dashed #9db2ce !important;
+    border-radius: 10px !important;
+    min-height: 118px !important;
+}
+.upload-zone:hover {
+    border-color: #2f6fed !important;
+    background: #f8fbff !important;
+}
+.audio-file-name {
+    color: #334155;
+    font-size: 13px;
+    margin: 6px 0 2px;
+}
+.audio-file-name code {
+    background: #eef2f7;
+    border: 1px solid #d8e0ea;
+    border-radius: 4px;
+    color: #111827;
+    padding: 2px 5px;
 }
 .convert-btn {
-    background: #4a9eff !important;
+    background: #2563eb !important;
     color: white !important;
-    font-weight: bold !important;
+    font-weight: 700 !important;
     font-size: 15px !important;
-    padding: 12px 32px !important;
-    border-radius: 10px !important;
+    padding: 12px 28px !important;
+    border-radius: 8px !important;
     border: none !important;
-    min-height: 48px !important;
+    min-height: 46px !important;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18) !important;
+}
+.convert-btn:hover {
+    background: #1d4ed8 !important;
 }
 .result-box textarea {
-    background: #16213e !important;
-    color: #e0e0e0 !important;
-    border: 1px solid #3a4a6a !important;
+    background: #ffffff !important;
+    color: #1f2937 !important;
+    border: 1px solid #ccd7e5 !important;
     border-radius: 8px !important;
-    font-family: 'Consolas', 'Ubuntu Mono', monospace !important;
+    font-family: ui-monospace, 'SFMono-Regular', 'Consolas', monospace !important;
     font-size: 13px !important;
 }
 .log-box textarea {
-    background: #0d1117 !important;
-    color: #8dc891 !important;
-    border: 1px solid #2a3a4a !important;
+    background: #fbfcfe !important;
+    color: #334155 !important;
+    border: 1px solid #ccd7e5 !important;
     border-radius: 8px !important;
-    font-family: 'Consolas', 'Ubuntu Mono', monospace !important;
+    font-family: ui-monospace, 'SFMono-Regular', 'Consolas', monospace !important;
     font-size: 12px !important;
     line-height: 1.5 !important;
 }
 .section-title {
-    color: #e0e0e0 !important;
-    font-weight: bold !important;
+    color: #1f2937 !important;
+    font-weight: 700 !important;
     font-size: 13px !important;
-    border-bottom: 1px solid #3a4a6a;
-    padding-bottom: 6px;
-    margin-bottom: 10px;
+    border-bottom: 1px solid #d8e0ea;
+    padding-bottom: 7px;
+    margin: 12px 0 10px;
 }
 .mode-info {
-    background: #16213e;
-    border: 1px solid #3a4a6a;
+    background: #eef5ff;
+    border: 1px solid #c8d9f1;
     border-radius: 8px;
-    padding: 10px 14px;
+    color: #24446f;
+    padding: 11px 14px;
     margin-top: 8px;
 }
 .device-badge {
-    background: #16213e;
-    border: 1px solid #3a4a6a;
-    border-radius: 6px;
-    padding: 6px 12px;
+    background: #f0f7f2;
+    border: 1px solid #bfdcc7;
+    border-radius: 8px;
+    color: #245733;
+    padding: 8px 12px;
     text-align: center;
 }
 .track-workbench {
-    background: #101c35 !important;
-    border: 1px solid #365f8d !important;
-    border-radius: 12px !important;
+    background: #ffffff !important;
+    border: 1px solid #d8e0ea !important;
+    border-radius: 10px !important;
     margin-top: 16px !important;
-    padding: 12px !important;
+    padding: 14px !important;
 }
 .track-card {
-    background: #172b4a !important;
-    border: 1px solid #365f8d !important;
-    border-radius: 10px !important;
+    background: #f8fafc !important;
+    border: 1px solid #d8e0ea !important;
+    border-radius: 8px !important;
     margin: 10px 0 !important;
-    padding: 10px !important;
+    padding: 12px !important;
 }
 .track-card audio {
     width: 100% !important;
 }
 .track-midi-status {
-    color: #9fbde2 !important;
+    color: #516071 !important;
     font-size: 12px !important;
 }
 .footer-info {
     text-align: center;
-    color: #6a7a8a !important;
+    color: #718096 !important;
     font-size: 12px;
-    border-top: 1px solid #2a2a4a;
+    border-top: 1px solid #d8e0ea;
     padding-top: 12px;
     margin-top: 16px;
+}
+.muscriptor-instrument-selector {
+    background: #ffffff !important;
+    border: 1px solid #d8e0ea !important;
+    border-radius: 6px !important;
+    padding: 6px 8px !important;
+    margin-top: 5px !important;
+}
+.muscriptor-instrument-selector .wrap {
+    gap: 2px 10px !important;
+}
+.muscriptor-instrument-selector label {
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 1px 0 !important;
+    line-height: 1.15 !important;
+    display: flex !important;
+    align-items: center !important;
+}
+.muscriptor-instrument-selector input[type="checkbox"] {
+    appearance: checkbox !important;
+    -webkit-appearance: checkbox !important;
+    width: 14px !important;
+    height: 14px !important;
+    min-width: 14px !important;
+    min-height: 14px !important;
+    max-width: 14px !important;
+    max-height: 14px !important;
+    aspect-ratio: 1 / 1 !important;
+    flex: 0 0 14px !important;
+    margin: 0 5px 0 0 !important;
+    padding: 0 !important;
+    border-radius: 2px !important;
+}
+.muscriptor-instrument-selector span {
+    font-family: ui-monospace, 'SFMono-Regular', 'Consolas', monospace !important;
+    font-size: 13px !important;
+    line-height: 1.15 !important;
+    overflow-wrap: anywhere !important;
+}
+.muscriptor-instrument-panel {
+    background: #fbfcfe !important;
+    border: 1px solid #d8e0ea !important;
+    border-radius: 8px !important;
+    padding: 8px 10px !important;
+    margin-top: 6px !important;
+}
+.muscriptor-instrument-panel .prose {
+    margin-bottom: 2px !important;
+}
+.msr-root {
+    color: #1f2937 !important;
+}
+.msr-source,
+.msr-toolbar,
+.msr-instruments {
+    background: #ffffff !important;
+    border-color: #d8e0ea !important;
+    color: #1f2937 !important;
+}
+.msr-roll-scroll,
+.msr-roll-world,
+.msr-roll-viewport {
+    background: #f8fafc !important;
+    border-color: #d8e0ea !important;
+}
+.msr-btn {
+    background: #ffffff !important;
+    color: #1f2937 !important;
+    border-color: #c9d4e2 !important;
+}
+.msr-btn:hover,
+.msr-btn.active {
+    background: #eef5ff !important;
+    border-color: #2f6fed !important;
+    color: #1d4ed8 !important;
+}
+.msr-clock {
+    background: #f8fafc !important;
+    border-color: #d8e0ea !important;
+    color: #334155 !important;
+}
+.msr-row.undetected {
+    opacity: .5;
+}
+@media (max-width: 760px) {
+    .gradio-container {
+        padding: 10px !important;
+    }
+    .app-header {
+        padding: 14px 16px;
+    }
 }
 """
 
@@ -2155,6 +2536,12 @@ LOG_POLL_HEAD = """<script>
 
 DEVICE_LABEL = st("space.ui.zerogpu_device") if ZERO_GPU else get_device_label()
 ZERO_GPU_NOTE = st("space.ui.zerogpu_note") if ZERO_GPU else ""
+DEFAULT_MODE = ProcessingMode.SMART.value
+DEFAULT_TRANSCRIPTION_BACKEND = (
+    MultiInstrumentModel.MUSCRIPTOR.value
+    if SZSERVER_MINIMAL_PROFILE
+    else MultiInstrumentModel.YOURMT3.value
+)
 
 with gr.Blocks(
     title=st("space.app.title"),
@@ -2166,17 +2553,17 @@ with gr.Blocks(
         neutral_hue=gr.themes.colors.slate,
         font=["system-ui", "Noto Sans SC", "sans-serif"],
     ).set(
-        body_background_fill="#1a1a2e",
-        block_background_fill="#1f2940",
-        block_border_color="#3a4a6a",
-        block_label_text_color="#b0b8c8",
-        block_title_text_color="#e0e0e0",
-        input_background_fill="#16213e",
-        input_border_color="#3a4a6a",
-        button_primary_background_fill="#4a9eff",
+        body_background_fill="#f6f8fb",
+        block_background_fill="#ffffff",
+        block_border_color="#d8e0ea",
+        block_label_text_color="#334155",
+        block_title_text_color="#111827",
+        input_background_fill="#ffffff",
+        input_border_color="#ccd7e5",
+        button_primary_background_fill="#2563eb",
         button_primary_text_color="white",
-        button_secondary_background_fill="#2a3f5f",
-        button_secondary_text_color="#e0e0e0",
+        button_secondary_background_fill="#eef2f7",
+        button_secondary_text_color="#1f2937",
     ),
 ) as demo:
     track_state = gr.State({})
@@ -2198,6 +2585,14 @@ with gr.Blocks(
                 elem_classes="upload-zone",
             )
             gr.Markdown(f"<small style='color:#6a7a8a'>{st('space.ui.audio_hint')}</small>")
+            audio_file_name = gr.Markdown("")
+            audio_input.change(
+                fn=update_audio_file_name,
+                inputs=[audio_input],
+                outputs=[audio_file_name],
+                api_name=False,
+                queue=False,
+            )
 
             gr.Markdown(
                 f"**{st('space.ui.track_section')}**",
@@ -2205,16 +2600,16 @@ with gr.Blocks(
             )
             mode_radio = gr.Radio(
                 choices=MODE_CHOICES,
-                value=ProcessingMode.SMART.value,
+                value=DEFAULT_MODE,
                 label=st("space.ui.mode_label"),
             )
             mode_info = gr.Markdown(
-                update_mode_info(ProcessingMode.SMART.value),
+                update_mode_info(DEFAULT_MODE),
                 elem_classes="mode-info",
             )
             transcription_backend = gr.Radio(
                 choices=BACKEND_CHOICES,
-                value=MultiInstrumentModel.YOURMT3.value,
+                value=DEFAULT_TRANSCRIPTION_BACKEND,
                 label=st("main.engine.active_label"),
                 visible=True,
             )
@@ -2222,22 +2617,41 @@ with gr.Blocks(
                 choices=YOURMT3_MODEL_CHOICES,
                 value=YourMT3Model.YPTF_MOE_MULTI_NOPS.value,
                 label=st("main.engine.yourmt3_model_label"),
-                visible=True,
+                visible=DEFAULT_TRANSCRIPTION_BACKEND == MultiInstrumentModel.YOURMT3.value,
             )
-            muscriptor_instruments = gr.Dropdown(
-                choices=MUSCRIPTOR_INSTRUMENT_CHOICES,
-                value=[],
-                multiselect=True,
-                filterable=True,
-                label=st("main.engine.muscriptor_instruments_title"),
-                info=st("main.engine.muscriptor_instruments_desc"),
-                visible=False,
-                elem_classes=["muscriptor-instrument-selector"],
-            )
+            muscriptor_instrument_groups = []
+            with gr.Group(
+                visible=DEFAULT_TRANSCRIPTION_BACKEND == MultiInstrumentModel.MUSCRIPTOR.value,
+                elem_classes=["muscriptor-instrument-panel"],
+            ) as muscriptor_instrument_panel:
+                gr.Markdown(
+                    f"**{st('main.engine.muscriptor_instruments_title')}**  \n"
+                    f"<small>{st('main.engine.muscriptor_instruments_desc')}</small>"
+                )
+                muscriptor_love_live_template = gr.Checkbox(
+                    value=False,
+                    label="Standard Love Live! song template",
+                )
+                for group_name, choices in MUSCRIPTOR_INSTRUMENT_GROUPS:
+                    muscriptor_instrument_groups.append(
+                        gr.CheckboxGroup(
+                            choices=[(name, name) for name in choices],
+                            value=[],
+                            label=group_name,
+                            elem_classes=["muscriptor-instrument-selector"],
+                        )
+                    )
+                muscriptor_love_live_template.change(
+                    fn=_apply_muscriptor_love_live_template,
+                    inputs=[muscriptor_love_live_template, *muscriptor_instrument_groups],
+                    outputs=muscriptor_instrument_groups,
+                    api_name=False,
+                    queue=False,
+                )
 
             with gr.Row():
                 convert_btn = gr.Button(
-                    _main_action_label(ProcessingMode.SMART.value),
+                    _main_action_label(DEFAULT_MODE),
                     variant="primary",
                     elem_classes="convert-btn",
                     size="lg",
@@ -2257,7 +2671,7 @@ with gr.Blocks(
                     mode_info,
                     transcription_backend,
                     yourmt3_model,
-                    muscriptor_instruments,
+                    muscriptor_instrument_panel,
                     convert_btn,
                 ],
                 api_name=False,
@@ -2266,7 +2680,7 @@ with gr.Blocks(
             transcription_backend.change(
                 fn=update_backend_controls,
                 inputs=[mode_radio, transcription_backend],
-                outputs=[yourmt3_model, muscriptor_instruments],
+                outputs=[yourmt3_model, muscriptor_instrument_panel],
                 api_name=False,
                 queue=False,
             )
@@ -2412,20 +2826,51 @@ with gr.Blocks(
                             interactive=bool(track["midi_enabled"] and route_selected),
                             key=f"midi-start-{track['id']}",
                         )
-                    midi_instruments = gr.Dropdown(
-                        choices=MUSCRIPTOR_INSTRUMENT_CHOICES,
-                        value=track.get("muscriptor_instruments", []),
-                        multiselect=True,
-                        filterable=True,
-                        label=st("main.engine.muscriptor_instruments_title"),
-                        info=st("main.engine.muscriptor_instruments_desc"),
+                    midi_instrument_groups = []
+                    selected_track_instruments = set(track.get("muscriptor_instruments", []))
+                    with gr.Group(
                         visible=track["route"] == MIDI_ROUTE_MUSCRIPTOR,
-                        interactive=bool(
-                            track["midi_enabled"] and track["route"] == MIDI_ROUTE_MUSCRIPTOR
-                        ),
-                        elem_classes=["muscriptor-instrument-selector"],
-                        key=f"midi-instruments-{track['id']}",
-                    )
+                        elem_classes=["muscriptor-instrument-panel"],
+                    ) as midi_instrument_panel:
+                        gr.Markdown(
+                            f"**{st('main.engine.muscriptor_instruments_title')}**  \n"
+                            f"<small>{st('main.engine.muscriptor_instruments_desc')}</small>"
+                        )
+                        midi_love_live_template = gr.Checkbox(
+                            value=set(LOVE_LIVE_MUSCRIPTOR_TEMPLATE).issubset(
+                                selected_track_instruments
+                            ),
+                            label="Standard Love Live! song template",
+                            interactive=bool(
+                                track["midi_enabled"] and track["route"] == MIDI_ROUTE_MUSCRIPTOR
+                            ),
+                            key=f"midi-love-live-template-{track['id']}",
+                        )
+                        for group_index, (group_name, choices) in enumerate(
+                            MUSCRIPTOR_INSTRUMENT_GROUPS
+                        ):
+                            midi_instrument_groups.append(
+                                gr.CheckboxGroup(
+                                    choices=[(name, name) for name in choices],
+                                    value=[
+                                        name for name in choices if name in selected_track_instruments
+                                    ],
+                                    label=group_name,
+                                    interactive=bool(
+                                        track["midi_enabled"]
+                                        and track["route"] == MIDI_ROUTE_MUSCRIPTOR
+                                    ),
+                                    elem_classes=["muscriptor-instrument-selector"],
+                                    key=f"midi-instruments-{track['id']}-{group_index}",
+                                )
+                            )
+                        midi_love_live_template.change(
+                            fn=_apply_muscriptor_love_live_template,
+                            inputs=[midi_love_live_template, *midi_instrument_groups],
+                            outputs=midi_instrument_groups,
+                            api_name=False,
+                            queue=False,
+                        )
                     midi_status = gr.Markdown(
                         track["status"],
                         elem_classes="track-midi-status",
@@ -2452,7 +2897,9 @@ with gr.Blocks(
                             midi_route,
                             start_midi,
                             midi_status,
-                            midi_instruments,
+                            midi_instrument_panel,
+                            midi_love_live_template,
+                            *midi_instrument_groups,
                         ],
                         api_name=False,
                         queue=False,
@@ -2464,19 +2911,21 @@ with gr.Blocks(
                             midi_route,
                             start_midi,
                             midi_status,
-                            midi_instruments,
+                            midi_instrument_panel,
+                            midi_love_live_template,
+                            *midi_instrument_groups,
                         ],
                         api_name=False,
                         queue=False,
                     )
                     start_midi.click(
-                        fn=_convert_one_track,
+                        fn=_convert_one_track_grouped,
                         inputs=[
                             track_state,
                             track_id_state,
                             midi_enabled,
                             midi_route,
-                            midi_instruments,
+                            *midi_instrument_groups,
                         ],
                         outputs=[track_state],
                         api_name=False,
@@ -2509,13 +2958,13 @@ with gr.Blocks(
                     )
 
     convert_btn.click(
-        fn=convert_audio_to_midi,
+        fn=_convert_audio_to_midi_grouped,
         inputs=[
             audio_input,
             mode_radio,
             transcription_backend,
             yourmt3_model,
-            muscriptor_instruments,
+            *muscriptor_instrument_groups,
         ],
         outputs=[file_output, status_output, track_state],
         api_name="convert",

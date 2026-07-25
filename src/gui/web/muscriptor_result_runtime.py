@@ -10,7 +10,6 @@ from src.gui.web.track_mixer_runtime import track_file_url
 from src.models.gm_instruments import get_instrument_name
 from src.models.muscriptor_instruments import (
     MUSCRIPTOR_REPRESENTATIVE_PROGRAMS,
-    muscriptor_instrument_label,
 )
 
 _COLORS = (
@@ -27,7 +26,7 @@ _COLORS = (
 
 def _result_instrument_label(instrument: str, language: str) -> str:
     if instrument in MUSCRIPTOR_REPRESENTATIVE_PROGRAMS or instrument == "drums":
-        return muscriptor_instrument_label(instrument, language)
+        return instrument
     if instrument.startswith("gm:"):
         try:
             return get_instrument_name(int(instrument.split(":", 1)[1]), language)
@@ -218,7 +217,7 @@ MUSCRIPTOR_RESULT_JS = r"""
   ResultSession.prototype.drawStatic=function(){if(!this.canvas)return;var p=this.canvas.getContext("2d"),d=this.dpr||1,w=this.canvas.width/d,h=HEIGHT,scrollX=this.scroll.scrollLeft,start=Math.max(0,(scrollX-LEFT)/this.pps),end=Math.min(this.m.duration,(scrollX+w-LEFT)/this.pps);p.setTransform(d,0,0,d,0,0);p.fillStyle="#0f1a2d";p.fillRect(0,0,w,h);for(var pitch=21;pitch<=108;pitch++){var y=(108-pitch)*ROW,black=[1,3,6,8,10].indexOf(pitch%12)>=0;p.fillStyle=black?"#13213a":"#172842";p.fillRect(LEFT,y,w-LEFT,ROW);p.strokeStyle="#2b3d5c";p.beginPath();p.moveTo(LEFT,y);p.lineTo(w,y);p.stroke();p.fillStyle=black?"#23282e":"#e4e8eb";p.fillRect(0,y,LEFT,ROW);if(pitch%12===0){p.fillStyle=black?"#ddd":"#222";p.font="7px monospace";p.fillText("C"+(Math.floor(pitch/12)-1),3,y+6);}}var step=this.pps>=180?.5:(this.pps>=80?1:2),first=Math.max(0,Math.floor(start/step)*step);for(var sec=first;sec<=end+step;sec+=step){var x=LEFT+sec*this.pps-scrollX;p.strokeStyle="#36506f";p.beginPath();p.moveTo(x,0);p.lineTo(x,h);p.stroke();p.fillStyle="#7f94b7";p.font="8px monospace";p.fillText(sec.toFixed(step<1?1:0)+"s",x+3,11);}var self=this;this.m.notes.forEach(function(n){if(n.pitch<21||n.pitch>108||n.end<start||n.start>end)return;var x=LEFT+n.start*self.pps-scrollX,y=(108-n.pitch)*ROW+1,width=Math.max(2,(n.end-n.start)*self.pps),inst=self.m.instruments.find(function(i){return i.id===n.instrument;});p.globalAlpha=self.muted.has(n.instrument)?.12:1;p.fillStyle=inst?inst.color:"#4a9eff";p.fillRect(x,y,width,ROW-2);});p.globalAlpha=1;};
   ResultSession.prototype.layoutPlayhead=function(){if(!this.playhead)return;var x=LEFT+this.position*this.pps-this.scroll.scrollLeft;this.playhead.style.transform="translate3d("+x.toFixed(2)+"px,0,0)";this.playhead.style.visibility=(x>=LEFT&&x<=this.scroll.clientWidth)?"visible":"hidden";this.clock.textContent=this.position.toFixed(1)+"s";};
   ResultSession.prototype.dispose=function(){if(this.disposed)return;this.disposed=true;this.pause();window.removeEventListener("music-to-midi-playback-start",this.onExternalPlayback);if(this.resizeObserver)this.resizeObserver.disconnect();cancelAnimationFrame(this.drawRaf);};
-  function scan(){for(var i=sessions.length-1;i>=0;i--){if(!sessions[i].root.isConnected){sessions[i].dispose();sessions.splice(i,1);}}document.querySelectorAll(".msr-root:not([data-msr-init])").forEach(function(root){root.setAttribute("data-msr-init","1");var s=new ResultSession(root);sessions.push(s);s.init();});}
+  function scan(){for(var i=sessions.length-1;i>=0;i--){if(!sessions[i].root.isConnected){sessions[i].dispose();sessions.splice(i,1);}}document.querySelectorAll(".msr-root:not([data-msr-init])").forEach(function(root){if(!root.querySelector(".msr-host"))return;root.setAttribute("data-msr-init","1");var s=new ResultSession(root);sessions.push(s);s.init();});}
   var timer=0;function schedule(){if(timer)return;timer=setTimeout(function(){timer=0;scan();},40);}new MutationObserver(function(changes){for(var i=0;i<changes.length;i++){for(var j=0;j<changes[i].addedNodes.length;j++){var n=changes[i].addedNodes[j];if(n.nodeType===1&&(n.matches(".msr-root")||n.querySelector(".msr-root"))){schedule();return;}}for(var k=0;k<changes[i].removedNodes.length;k++){var r=changes[i].removedNodes[k];if(r.nodeType===1&&(r.matches(".msr-root")||r.querySelector(".msr-root"))){schedule();return;}}}}).observe(document.documentElement,{childList:true,subtree:true});if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",schedule);else schedule();
 })();
 """
