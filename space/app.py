@@ -103,10 +103,22 @@ logger = logging.getLogger("music-to-midi-web")
 SPACE_OUTPUT_RETENTION_SECONDS = int(
     os.environ.get("MUSIC_TO_MIDI_SPACE_OUTPUT_RETENTION_SECONDS", "86400")
 )
-if SPACE_OUTPUT_RETENTION_SECONDS <= 0:
-    raise RuntimeError("MUSIC_TO_MIDI_SPACE_OUTPUT_RETENTION_SECONDS must be positive")
+if SPACE_OUTPUT_RETENTION_SECONDS < 0:
+    raise RuntimeError("MUSIC_TO_MIDI_SPACE_OUTPUT_RETENTION_SECONDS cannot be negative")
+GRADIO_DELETE_CACHE = (
+    None if SPACE_OUTPUT_RETENTION_SECONDS == 0 else (3600, SPACE_OUTPUT_RETENTION_SECONDS)
+)
+SPACE_CLEANUP_ON_EXIT = (
+    os.environ.get("MUSIC_TO_MIDI_SPACE_CLEANUP_ON_EXIT", "1").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
 
-SPACE_OUTPUT_PARENT = Path(APP_TEMP_DIR) / "music-to-midi-space-results"
+SPACE_OUTPUT_PARENT = Path(
+    os.environ.get(
+        "MUSIC_TO_MIDI_SPACE_OUTPUT_PARENT",
+        str(Path(APP_TEMP_DIR) / "music-to-midi-space-results"),
+    )
+)
 SPACE_OUTPUT_PARENT.mkdir(parents=True, exist_ok=True)
 SPACE_OUTPUT_INSTANCE = Path(
     tempfile.mkdtemp(prefix=f"instance-{os.getpid()}-", dir=SPACE_OUTPUT_PARENT)
@@ -142,6 +154,9 @@ def _remove_stale_space_instance(instance_dir: str | Path) -> None:
 
 def _cleanup_stale_space_outputs(*, now: float | None = None) -> None:
     """Delete expired results and crashed-process instances after the retention window."""
+
+    if SPACE_OUTPUT_RETENTION_SECONDS == 0:
+        return
 
     cutoff = (time.time() if now is None else now) - SPACE_OUTPUT_RETENTION_SECONDS
     for candidate in SPACE_OUTPUT_INSTANCE.iterdir():
@@ -199,7 +214,8 @@ def _cleanup_space_instance_at_exit() -> None:
         logger.error("Unable to remove Space output instance at shutdown: %s", exc)
 
 
-atexit.register(_cleanup_space_instance_at_exit)
+if SPACE_CLEANUP_ON_EXIT:
+    atexit.register(_cleanup_space_instance_at_exit)
 
 
 class _RobustFileHandler(logging.Handler):
@@ -2547,7 +2563,7 @@ with gr.Blocks(
     title=st("space.app.title"),
     css=CUSTOM_CSS,
     head=LOG_POLL_HEAD + mixer_head() + muscriptor_result_head(),
-    delete_cache=(3600, SPACE_OUTPUT_RETENTION_SECONDS),
+    delete_cache=GRADIO_DELETE_CACHE,
     theme=gr.themes.Base(
         primary_hue=gr.themes.colors.blue,
         neutral_hue=gr.themes.colors.slate,
