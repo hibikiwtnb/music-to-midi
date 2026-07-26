@@ -173,13 +173,14 @@ MUSCRIPTOR_RESULT_JS = r"""
   }
   function ResultSession(root) {
     this.root=root; this.host=root.querySelector(".msr-host"); this.m={}; this.buffers={}; this.sources=[];
-    this.gains={}; this.panners={}; this.position=0; this.startedAt=0; this.playing=false; this.muted=new Set(); this.solo=null; this.mix=.75; this.stereo=false; this.follow=true; this.raf=0;
+    this.gains={}; this.panners={}; this.position=0; this.startedAt=0; this.playing=false; this.muted=new Set(); this.solo=null; this.mix=.75; this.stereo=false; this.follow=true; this.originalAvailable=false; this.raf=0;
     this.pps=92; this.drawRaf=0; this.disposed=false; this.ownerId="midi-result-"+(nextSessionId++);
     this.onExternalPlayback=this.handleExternalPlayback.bind(this);
   }
   ResultSession.prototype.init=function(){
     try { this.m=JSON.parse(this.root.querySelector(".msr-manifest").textContent); } catch(e){this.host.textContent=String(e);return;}
-    this.build(); window.addEventListener("music-to-midi-playback-start",this.onExternalPlayback); var self=this; var jobs=[load(this.m.originalUrl).then(function(b){self.buffers.original=b;})];
+    this.build(); window.addEventListener("music-to-midi-playback-start",this.onExternalPlayback); var self=this,jobs=[];
+    if(this.m.originalUrl){jobs.push(load(this.m.originalUrl).then(function(b){self.buffers.original=b;self.originalAvailable=true;}).catch(function(e){self.originalAvailable=false;if(self.mixInput)self.mixInput.disabled=true;console.warn("Original audio unavailable; MIDI playback remains enabled",e);}));}
     this.m.instruments.forEach(function(i){if(i.detected&&i.url)jobs.push(load(i.url).then(function(b){self.buffers[i.id]=b;}));});
     Promise.all(jobs).then(function(){if(self.disposed)return;self.play.disabled=false;self.status.textContent=self.m.strings.ready;self.drawStatic();self.layoutPlayhead();}).catch(function(e){if(!self.disposed)self.status.textContent=String(e);});
   };
