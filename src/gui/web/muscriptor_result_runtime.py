@@ -120,15 +120,15 @@ MUSCRIPTOR_RESULT_CSS = r"""
 .muscriptor-instrument-selector input {
   color:#e0e0e0 !important; font-size:12px !important; min-height:34px !important;
 }
-.msr-root { margin: 10px 0; color: #e0e0e0; }
-.msr-source { color:#8fc6ff; font-weight:600; background:#122039; border:1px solid #2c4f7c; border-radius:6px; padding:8px 10px; margin-bottom:8px; }
-.msr-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px; border:1px solid #365f8d; border-radius:8px; background:#17243d; }
-.msr-btn { background:#2a3f5f; color:#e0e0e0; border:1px solid #3a4a6a; border-radius:5px; padding:6px 11px; cursor:pointer; }
-.msr-btn:hover { background:#3a5a7c; border-color:#4a9eff; }
+.msr-root { margin: 10px 0; color: #222; font-family:Arial,Helvetica,'Noto Sans TC',sans-serif; }
+.msr-source { color:#0069aa; font-weight:600; background:#f9f9f9; border:1px solid #b7b7b7; border-radius:3px; padding:7px 9px; margin-bottom:8px; }
+.msr-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 10px; border:1px solid #b7b7b7; border-radius:3px; background:#f9f9f9; box-shadow:0 1px 2px rgba(0,0,0,.06); }
+.msr-btn { background:linear-gradient(#fff,#e7e7e7); color:#0069aa; border:1px solid #aaa; border-radius:3px; padding:5px 10px; cursor:pointer; box-shadow:inset 0 1px 0 rgba(255,255,255,.75); }
+.msr-btn:hover { background:linear-gradient(#fff,#ddd); border-color:#777; color:#004b7a; }
 .msr-btn:disabled { opacity:.4; cursor:default; }
-.msr-btn.active { color:#8fc6ff; border-color:#4a9eff; background:#203f68; }
-.msr-clock { font-family:monospace; color:#c8d3e6; border:1px solid #3a4a6a; border-radius:4px; background:#16213e; padding:5px 8px; }
-.msr-mix { margin-left:auto; display:flex; align-items:center; gap:8px; color:#9aa5ad; }
+.msr-btn.active { color:#fff; border-color:#0069aa; background:#0069aa; box-shadow:none; }
+.msr-clock { font-family:monospace; color:#333; border:1px solid #b7b7b7; border-radius:3px; background:#fff; padding:5px 8px; }
+.msr-mix { margin-left:auto; display:flex; align-items:center; gap:8px; color:#333; }
 .msr-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,340px); gap:12px; margin-top:12px; }
 .msr-roll-scroll { overflow:auto; max-height:650px; border:1px solid #365f8d; border-radius:6px; background:#0f1a2d; scrollbar-color:#3d628e #101b2d; scrollbar-width:thin; }
 .msr-roll-scroll::-webkit-scrollbar { width:12px; height:12px; }
@@ -139,13 +139,14 @@ MUSCRIPTOR_RESULT_CSS = r"""
 .msr-roll-viewport { position:sticky; left:0; height:616px; overflow:hidden; }
 .msr-roll { display:block; cursor:crosshair; }
 .msr-playhead { position:absolute; top:0; bottom:0; width:2px; background:#fff; pointer-events:none; will-change:transform; }
-.msr-instruments { border:1px solid #365f8d; border-radius:6px; background:#16213e; padding:12px; align-self:start; }
-.msr-instruments h3 { margin:0 0 10px; }
-.msr-row { display:flex; align-items:center; gap:7px; padding:6px 4px; }
+.msr-instruments { border:1px solid #b7b7b7; border-radius:3px; background:#f9f9f9; padding:10px; align-self:start; box-shadow:0 1px 2px rgba(0,0,0,.06); }
+.msr-instruments h3 { margin:0 0 8px; color:#333; font-size:15px; font-weight:600; }
+.msr-row { display:flex; align-items:center; gap:7px; padding:5px 4px; border-top:1px solid #e1e1e1; }
+.msr-row:first-of-type { border-top:0; }
 .msr-row.undetected { opacity:.38; text-decoration:line-through; }
-.msr-swatch { flex:0 0 11px; width:11px; height:11px; }
-.msr-name { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:monospace; font-size:12px; }
-.msr-row .msr-btn { flex:0 0 auto; min-width:28px; padding:4px 7px; text-align:center; }
+.msr-swatch { flex:0 0 11px; width:11px; height:11px; border:1px solid rgba(0,0,0,.22); }
+.msr-name { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:monospace; font-size:12px; color:#222; }
+.msr-row .msr-btn { flex:0 0 auto; min-width:28px; padding:3px 7px; text-align:center; }
 .msr-row.muted .msr-name { opacity:.2; }
 .msr-downloads { display:flex; flex-wrap:wrap; gap:8px; padding:12px 0 0; }
 .msr-downloads a { text-decoration:none; }
