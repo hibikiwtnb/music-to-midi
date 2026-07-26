@@ -933,6 +933,19 @@ def _build_midi_result_state(
     }
 
 
+def _persist_input_audio(audio_path: str | Path, output_dir: str | Path) -> Path:
+    source = Path(audio_path).resolve()
+    if not source.is_file():
+        raise RuntimeError(f"Input audio is unavailable and cannot be persisted: {source}")
+    destination_dir = Path(output_dir).resolve()
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    suffix = source.suffix.lower() or ".audio"
+    destination = destination_dir / f"input{suffix}"
+    if source != destination:
+        shutil.copy2(source, destination)
+    return destination
+
+
 def _write_midi_result_share_page(result_state: dict, output_dir: str | Path) -> str:
     """Write a standalone page for reopening the MIDI workbench from another browser."""
     from src.gui.web.muscriptor_result_runtime import (
@@ -1409,9 +1422,10 @@ def _convert_impl(
             config.transcription_backend == MultiInstrumentModel.MUSCRIPTOR.value
             and config.processing_mode == ProcessingMode.SMART.value
         )
+        persisted_audio_path = _persist_input_audio(audio_path, output_dir)
         result_state = _build_midi_result_state(
             result,
-            audio_path,
+            persisted_audio_path,
             Path(output_dir) / "midi-playback",
             backend_label=_result_backend_label(config),
             muscriptor_groups=is_muscriptor,
